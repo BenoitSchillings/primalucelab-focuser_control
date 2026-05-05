@@ -1,6 +1,7 @@
 """Tiny CLI for smoke-testing primalucelab against a real device.
 
 Examples:
+    python -m primalucelab discover
     python -m primalucelab info /dev/ttyACM0
     python -m primalucelab status /dev/ttyACM0
     python -m primalucelab move /dev/ttyACM0 12345
@@ -14,6 +15,7 @@ import json
 import logging
 import sys
 
+from .discover import discover, list_usb_ports
 from .esatto import Esatto
 from .sestosenso import SestoSenso2, SestoSenso3
 from .transport import Transport
@@ -88,6 +90,30 @@ def _cmd_raw(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_discover(args: argparse.Namespace) -> int:
+    if args.all:
+        # Filter to actual USB devices — pyserial enumerates legacy ttyS*
+        # lines too, which clutter the output.
+        ports = [p for p in list_usb_ports() if p.vid is not None]
+        if not ports:
+            print("no USB serial ports found")
+            return 0
+        for p in ports:
+            print(
+                f"{p.device}  vid=0x{p.vid:04x} pid=0x{p.pid:04x}  "
+                f"serial={p.serial_number!r}  product={p.product!r}"
+            )
+        return 0
+
+    devices = discover(timeout=args.timeout, baudrate=args.baud)
+    if not devices:
+        print("no PrimaLuceLab devices found")
+        return 1
+    for d in devices:
+        print(f"{d.device}  model={d.model!r}  serial={d.serial_number!r}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="primalucelab")
     parser.add_argument("--baud", type=int, default=115200)
@@ -118,6 +144,17 @@ def main(argv: list[str] | None = None) -> int:
     p_raw.add_argument("port")
     p_raw.add_argument("json", help='e.g. \'{"req":{"get":{"MOT1":{"ABS_POS":""}}}}\'')
     p_raw.set_defaults(func=_cmd_raw)
+
+    p_discover = sub.add_parser(
+        "discover",
+        help="probe USB serial ports for PrimaLuceLab devices (or --all)",
+    )
+    p_discover.add_argument(
+        "--all",
+        action="store_true",
+        help="list every USB serial port the OS sees, without probing",
+    )
+    p_discover.set_defaults(func=_cmd_discover)
 
     args = parser.parse_args(argv)
     if args.verbose:

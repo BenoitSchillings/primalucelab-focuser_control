@@ -19,6 +19,7 @@ driver, plus a small CLI for ad-hoc testing.
 - [Architecture](#architecture)
 - [CLI](#cli)
 - [API reference](#api-reference)
+  - [Device discovery](#device-discovery)
   - [`Transport`](#class-transport)
   - [`Focuser` (base class)](#class-focuser)
   - [`SestoSenso2`](#class-sestosenso2)
@@ -124,6 +125,8 @@ The CLI auto-detects the device class from `MODNAME` and picks `SestoSenso3`,
 
 | Command | What it does |
 |---|---|
+| `discover` | Probes every USB serial port and prints the PrimaLuceLab devices that respond. |
+| `discover --all` | Lists every USB serial port the OS sees (no probing). Use to find VID/PID/serial. |
 | `info <port>` | Prints model, serial, firmware, current and max position, motor and external temperatures. |
 | `status <port>` | Pretty-prints the full `STATUS` dict from the device. |
 | `move <port> <position> [--wait] [--wait-timeout=120]` | Moves to absolute step position. With `--wait`, blocks until `BUSY` returns 0. |
@@ -158,8 +161,85 @@ from primalucelab import (
     TransportError,
     ProtocolError,
     DeviceError,
+    # discovery
+    discover,
+    find_port,
+    find_port_by_hwid,
+    list_usb_ports,
+    DeviceInfo,
+    PortInfo,
 )
 ```
+
+---
+
+### Device discovery
+
+When the host has multiple `ttyACM*` (or `cu.usbmodem*`, or `COM*`) ports
+attached, you rarely want to hard-code a path. The `discover` module wraps
+pyserial's enumeration plus a brief on-the-wire probe.
+
+#### `find_port(*, vid=None, pid=None, serial_number=None) -> Optional[str]`
+
+Pure enumeration — no port is opened. Any combination of fields may be
+supplied; criteria are AND-combined and `None` arguments are ignored.
+
+```python
+from primalucelab import find_port, Transport, Esatto
+
+# match a model (any unit of that VID:PID)
+path = find_port(vid=0x03EB, pid=0x2404)
+
+# disambiguate two ESATTOs by their USB iSerial
+path = find_port(vid=0x03EB, pid=0x2404, serial_number="ESATTO35-12345")
+
+with Transport(path) as t:
+    Esatto(t).get_model()
+```
+
+#### `find_port_by_hwid(needle: str) -> Optional[str]`
+
+Substring (case-insensitive) match against the kernel `hwid` string, which
+includes VID, PID, and iSerial. Useful when you want to remember one tag:
+
+```python
+from primalucelab import find_port_by_hwid
+
+path = find_port_by_hwid("ESATTO35")        # or "03EB:2404", or the iSerial
+```
+
+#### `list_usb_ports() -> list[PortInfo]`
+
+Returns every USB serial port the OS sees, as a list of frozen
+`PortInfo` dataclasses with these fields: `device`, `vid`, `pid`,
+`serial_number`, `manufacturer`, `product`, `description`, `hwid`.
+
+```python
+from primalucelab import list_usb_ports
+
+for p in list_usb_ports():
+    print(p.device, hex(p.vid or 0), hex(p.pid or 0), p.serial_number, p.product)
+```
+
+#### `discover(*, timeout=1.0, baudrate=115200) -> list[DeviceInfo]`
+
+Higher-level: opens each candidate port briefly, asks for `MODNAME` and
+`SN`, and returns the ones that answer. Ports that time out or reply with
+non-JSON are silently skipped, so this is safe to run on systems with
+other USB serial peripherals.
+
+```python
+from primalucelab import discover
+
+for d in discover():
+    print(f"{d.device}  {d.model}  SN={d.serial_number}")
+    print("   USB:", d.port_info.vid, d.port_info.pid, d.port_info.serial_number)
+```
+
+`DeviceInfo` exposes: `device`, `model`, `serial_number`, and `port_info`
+(a `PortInfo` carrying the USB-side metadata for the same port).
+
+The same probing is available from the CLI as `python -m primalucelab discover`.
 
 ---
 
