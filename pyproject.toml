@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "primalucelab"
+version = "0.1.0"
+description = "Python driver for PrimaLuceLab focusers (SESTO SENSO 2/3, ESATTO)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "LGPL-2.1-or-later" }
+authors = [{ name = "Benoit Schillings" }]
+keywords = ["primalucelab", "sestosenso", "esatto", "focuser", "astronomy", "telescope"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+    "pyserial>=3.5",
+]
+
+[project.scripts]
+primalucelab = "primalucelab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["primalucelab*"]
