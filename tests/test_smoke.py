@@ -116,6 +116,35 @@ class FocuserTests(unittest.TestCase):
         fake.reply({"res": {"get": {"SWVERS": {"SWAPP": "3.05", "SWBL": "1.2"}}}})
         self.assertEqual(Esatto(t).get_firmware_version(), "3.05")
 
+    def test_is_busy_when_stopped(self) -> None:
+        t, fake = make_transport()
+        fake.reply({"res": {"get": {"MOT1": {"STATUS": {"BUSY": 0, "MST": "stop"}}}}})
+        self.assertFalse(Esatto(t).is_busy())
+
+    def test_is_busy_when_busy_flag_set(self) -> None:
+        t, fake = make_transport()
+        fake.reply({"res": {"get": {"MOT1": {"STATUS": {"BUSY": 1, "MST": "acc"}}}}})
+        self.assertTrue(Esatto(t).is_busy())
+
+    def test_is_busy_during_fast_move_constant_speed(self) -> None:
+        # L6470 RUN command clears BUSY at cruise speed; MST still reports
+        # motion. Without the MST check, is_busy would wrongly return False
+        # mid-fast_move_in/out.
+        t, fake = make_transport()
+        fake.reply({"res": {"get": {"MOT1": {"STATUS": {"BUSY": 0, "MST": "CstSpeed"}}}}})
+        self.assertTrue(Esatto(t).is_busy())
+
+    def test_is_busy_during_deceleration(self) -> None:
+        t, fake = make_transport()
+        fake.reply({"res": {"get": {"MOT1": {"STATUS": {"BUSY": 0, "MST": "dec"}}}}})
+        self.assertTrue(Esatto(t).is_busy())
+
+    def test_is_busy_with_no_mst_field(self) -> None:
+        # Some firmware variants may omit MST entirely; fall back to BUSY.
+        t, fake = make_transport()
+        fake.reply({"res": {"get": {"MOT1": {"STATUS": {"BUSY": 0}}}}})
+        self.assertFalse(Esatto(t).is_busy())
+
 
 class SestoSenso3Tests(unittest.TestCase):
     def test_goto_uses_goto_command(self) -> None:

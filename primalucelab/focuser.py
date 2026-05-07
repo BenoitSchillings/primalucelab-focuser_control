@@ -70,7 +70,15 @@ class Focuser:
         return result
 
     def is_busy(self) -> bool:
-        return int(self.get_status().get("BUSY", 0)) == 1
+        # The underlying L6470/L6480 stepper driver clears BUSY as soon as a
+        # RUN command (used by fast_move_in/out) reaches cruise speed, even
+        # though the motor keeps turning. MST stays at 'acc' / 'CstSpeed' /
+        # 'dec' until the motion actually stops, so combine both signals.
+        status = self.get_status()
+        if int(status.get("BUSY", 0)) == 1:
+            return True
+        mst = str(status.get("MST", "")).strip()
+        return mst not in ("", "stop")
 
     # ---- sensors ------------------------------------------------------------
 

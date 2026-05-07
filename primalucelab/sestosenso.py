@@ -116,8 +116,8 @@ class SestoSenso3(Focuser):
     """SESTO SENSO 3 robotic focusing motor.
 
     SS3 firmware uses ``GOTO`` instead of ``MOVE_ABS`` and reports its
-    position via ``ABS_POS_STEP``. Status reporting also adds a textual
-    ``MST`` field that may lag ``BUSY``, so :meth:`is_busy` checks both.
+    position via ``ABS_POS_STEP``. ``is_busy`` is inherited from
+    :class:`Focuser`, which combines ``BUSY`` and ``MST`` correctly.
     """
 
     # ---- motion overrides --------------------------------------------------
@@ -127,13 +127,6 @@ class SestoSenso3(Focuser):
 
     def get_absolute_position(self) -> int:
         return int(self.transport.get("MOT1", "ABS_POS_STEP"))
-
-    def is_busy(self) -> bool:
-        status = self.get_status()
-        busy = int(status.get("BUSY", 0)) == 1
-        mst = str(status.get("MST", "")).strip()
-        motor_stopped = (mst == "") or (mst == "stop")
-        return busy or not motor_stopped
 
     # ---- model / submodel --------------------------------------------------
 
